@@ -9,19 +9,24 @@ use App\Services\MpesaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class MpesaController extends Controller
 {
     
- public function callback(Request $request)
+ 
+public function callback(Request $request)
 {
     $data = $request->all();
 
-    // Log::info('M-Pesa Callback Received', $data);
+    Log::info('M-Pesa Callback Received', $data);
 
     $callback = $data['Body']['stkCallback'] ?? null;
 
     if (!$callback) {
+        Log::warning('Invalid M-Pesa callback structure');
+
         return response()->json([
             'ResultCode' => 1,
             'ResultDesc' => 'Invalid callback data',
@@ -29,90 +34,142 @@ class MpesaController extends Controller
     }
 
     $checkoutRequestId = $callback['CheckoutRequestID'] ?? null;
-
     $resultCode = $callback['ResultCode'] ?? null;
 
-    $payment = \App\Models\Payment::where(
-        'checkout_request_id',
-        $checkoutRequestId
-    )->first();
-
-    if (!$payment) {
-        Log::warning(
-            'M-Pesa payment not found',
-            [
-                'checkout_request_id' => $checkoutRequestId,
-            ]
-        );
-
+    if (!$checkoutRequestId || $resultCode === null) {
         return response()->json([
-            'ResultCode' => 0,
-            'ResultDesc' => 'Callback received',
+            'ResultCode' => 1,
+            'ResultDesc' => 'Missing callback information',
         ]);
     }
 
-    if ((int) $resultCode === 0) {
+    try {
+        DB::transaction(function () use (
+            $callback,
+            $checkoutRequestId,
+            $resultCode
+        ) {
+            $payment = Payment::where(
+                'checkout_request_id',
+                $checkoutRequestId
+            )
+            ->lockForUpdate()
+            ->first();
 
-        $metadata = collect(
-            $callback['CallbackMetadata']['Item'] ?? []
-        )->keyBy('Name');
+            if (!$payment) {
+                Log::warning('M-Pesa payment not found', [
+                    'checkout_request_id' => $checkoutRequestId,
+                ]);
 
-        $receiptNumber =
-            $metadata->get('MpesaReceiptNumber')['Value']
-            ?? null;
+                return;
+            }
 
-        $transactionDate =
-            $metadata->get('TransactionDate')['Value']
-            ?? null;
+            // Prevent processing an already completed payment.
+            if ($payment->status === 'completed') {
+                Log::info('Duplicate M-Pesa callback ignored', [
+                    'payment_id' => $payment->id,
+                ]);
 
-        $phoneNumber =
-            $metadata->get('PhoneNumber')['Value']
-            ?? null;
+                return;
+            }
 
-        $payment->update([
-            'status' => 'completed',
+            // Successful STK Push
+            if ((int) $resultCode === 0) {
 
-            'transaction_reference' =>
-                $receiptNumber,
+                $metadata = collect(
+                    $callback['CallbackMetadata']['Item'] ?? []
+                )->keyBy('Name');
 
-            'receipt_number' =>
-                'RCP' .
-                str_pad(
-                    $payment->id,
-                    6,
-                    '0',
-                    STR_PAD_LEFT
-                ),
+                $amount = $metadata->get('Amount')['Value'] ?? null;
 
-            'payment_date' =>
-                now()->toDateString(),
+                $receipt = $metadata->get('MpesaReceiptNumber')['Value'] ?? null;
+
+                $transactionDate = $metadata->get('TransactionDate')['Value'] ?? null;
+
+                $phone = $metadata->get('PhoneNumber')['Value'] ?? null;
+
+                // Validate essential callback information.
+                if (
+                    $amount === null ||
+                    !$receipt ||
+                    !$transactionDate
+                ) {
+                    Log::error('Incomplete successful M-Pesa callback', [
+                        'payment_id' => $payment->id,
+                    ]);
+
+                    return;
+                }
+
+                // Confirm Safaricom returned the requested amount.
+                if (
+                    round((float) $amount, 2) !==
+                    round((float) $payment->amount, 2)
+                ) {
+                    Log::error('M-Pesa amount mismatch', [
+                        'payment_id' => $payment->id,
+                        'expected_amount' => $payment->amount,
+                        'received_amount' => $amount,
+                    ]);
+
+                    $payment->update([
+                        'status' => 'failed',
+                    ]);
+
+                    return;
+                }
+
+                // Convert Safaricom date: YYYYMMDDHHMMSS
+                $paymentDate = Carbon::createFromFormat(
+                    'YmdHis',
+                    (string) $transactionDate
+                )->toDateString();
+
+                $payment->update([
+                    'status' => 'completed',
+                    'transaction_reference' => $receipt,
+                    'receipt_number' => 'RCP' . str_pad(
+                        $payment->id,
+                        6,
+                        '0',
+                        STR_PAD_LEFT
+                    ),
+                    'payment_date' => $paymentDate,
+                ]);
+
+                Log::info('M-Pesa payment completed', [
+                    'payment_id' => $payment->id,
+                    'receipt' => $receipt,
+                    'phone' => $phone,
+                    'amount' => $amount,
+                ]);
+
+            } else {
+
+                // Failed or cancelled STK Push
+                $payment->update([
+                    'status' => 'failed',
+                ]);
+
+                Log::warning('M-Pesa payment failed', [
+                    'payment_id' => $payment->id,
+                    'result_code' => $resultCode,
+                    'description' => $callback['ResultDesc'] ?? null,
+                ]);
+            }
+        });
+
+    } catch (\Throwable $e) {
+
+        Log::error('M-Pesa callback processing error', [
+            'checkout_request_id' => $checkoutRequestId,
+            'error' => $e->getMessage(),
         ]);
 
-        Log::info(
-            'M-Pesa payment completed',
-            [
-                'payment_id' => $payment->id,
-                'receipt' => $receiptNumber,
-                'phone' => $phoneNumber,
-                'transaction_date' => $transactionDate,
-            ]
-        );
-
-    } else {
-
-        $payment->update([
-            'status' => 'failed',
+        return response()->json([
+            'ResultCode' => 1,
+            'ResultDesc' => 'Callback processing failed',
         ]);
-
-        Log::warning(
-            'M-Pesa payment failed',
-            [
-                'payment_id' => $payment->id,
-                'result_code' => $resultCode,
-                'result_description' =>
-                    $callback['ResultDesc'] ?? null,
-            ]
-        );
     }
 
     return response()->json([
@@ -120,6 +177,7 @@ class MpesaController extends Controller
         'ResultDesc' => 'Callback processed successfully',
     ]);
 }
+
 
     public function initiateMpesa(Request $request, MpesaService $mpesa)
 {
@@ -235,9 +293,9 @@ class MpesaController extends Controller
     'checkout_request_id' =>
         $response['CheckoutRequestID'] ?? null,
 
-    'receipt_number' => 'TEMP-' . uniqid(),
+    'receipt_number' => null,
 
-    'payment_date' => now()->toDateString(),
+    'payment_date' => null,
 
     'status' => 'pending',
 
