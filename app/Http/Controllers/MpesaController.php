@@ -18,6 +18,9 @@ class MpesaController extends Controller
  
 public function callback(Request $request)
 {
+      Log::error('MPESA CALLBACK RECEIVED', [
+        'payload' => $request->all(),
+    ]);
     $data = $request->all();
 
     Log::info('M-Pesa Callback Received', $data);

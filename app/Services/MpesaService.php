@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class MpesaService
 {
@@ -33,17 +32,7 @@ class MpesaService
     string $accountReference,
     string $transactionDescription
 ) {
-
- // Add diagnostic logging here
-    Log::info('MPESA CONFIG CHECK', [
-        'environment' => config('services.mpesa.env'),
-        'shortcode' => config('services.mpesa.shortcode'),
-        'callback_url' => config('services.mpesa.callback_url'),
-        'consumer_key_exists' => !empty(config('services.mpesa.consumer_key')),
-        'consumer_secret_exists' => !empty(config('services.mpesa.consumer_secret')),
-        'passkey_exists' => !empty(config('services.mpesa.passkey')),
-    ]);
-
+    
     $accessToken = $this->getAccessToken();
 
     // Normalize phone number
