@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class MpesaService
 {
@@ -32,17 +33,32 @@ class MpesaService
     string $accountReference,
     string $transactionDescription
 ) {
+
+ // Add diagnostic logging here
+    Log::info('MPESA CONFIG CHECK', [
+        'environment' => config('services.mpesa.env'),
+        'shortcode' => config('services.mpesa.shortcode'),
+        'callback_url' => config('services.mpesa.callback_url'),
+        'consumer_key_exists' => !empty(config('services.mpesa.consumer_key')),
+        'consumer_secret_exists' => !empty(config('services.mpesa.consumer_secret')),
+        'passkey_exists' => !empty(config('services.mpesa.passkey')),
+    ]);
+
     $accessToken = $this->getAccessToken();
 
     // Normalize phone number
+    $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
+
     $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
 
     if (str_starts_with($phoneNumber, '0')) {
         $phoneNumber = '254' . substr($phoneNumber, 1);
     }
 
-    if (str_starts_with($phoneNumber, '+254')) {
-        $phoneNumber = substr($phoneNumber, 1);
+    if (!preg_match('/^254[17][0-9]{8}$/', $phoneNumber)) {
+        throw new \InvalidArgumentException(
+            'Invalid Kenyan M-Pesa phone number.'
+        );
     }
 
     // M-Pesa requires a whole-number amount
