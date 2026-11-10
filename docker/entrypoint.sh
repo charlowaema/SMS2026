@@ -20,8 +20,8 @@ php artisan migrate --force --no-interaction
 php artisan cache:clear || true
  
 # Seed essential data
-php artisan db:seed --class=RolesAndPermissionsSeeder --force --no-interaction
-php artisan db:seed --class=AdminUserSeeder --force --no-interaction
+#php artisan db:seed --class=RolesAndPermissionsSeeder --force --no-interaction
+#php artisan db:seed --class=AdminUserSeeder --force --no-interaction
  
 # Cache for performance
 php artisan config:cache
