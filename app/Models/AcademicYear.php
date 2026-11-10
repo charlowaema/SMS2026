@@ -2,42 +2,24 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class AcademicYear extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'student_id',
-        'course_id',
-        'semester_id',
-        'academic_year_id',
+        'name',
     ];
-    /**
-     * An enrollment belongs to one student.
-     */
-    public function student()
+
+    public function enrollments()
     {
-        return $this->belongsTo(Student::class);
+        return $this->hasMany(Enrollment::class);
     }
-    /**
-     * An enrollment belongs to one course.
-     */
-    public function course()
+
+    public function feeStructures()
     {
-        return $this->belongsTo(Course::class);
-    }
-    /**
-     * An enrollment belongs to one semester.
-     */
-    public function semester()
-    {
-        return $this->belongsTo(Semester::class);
-    }
-    /**
-     * An enrollment belongs to one academic year.
-     */
-    public function academicYear()
-    {
-        return $this->belongsTo(AcademicYear::class);
+        return $this->hasMany(FeeStructure::class);
     }
 }

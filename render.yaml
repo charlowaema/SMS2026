@@ -1,0 +1,70 @@
+# render.yaml
+
+services:
+  - type: web
+    name: student-management-system
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+
+    envVars:
+      - key: APP_NAME
+        value: "Student Management System"
+
+      - key: APP_ENV
+        value: production
+
+      - key: APP_DEBUG
+        value: false
+
+      - key: APP_KEY
+        generateValue: true
+
+      - key: APP_URL
+        value: https://student-management-system2026.onrender.com
+
+      - key: DB_CONNECTION
+        value: pgsql
+
+      - key: DB_HOST
+        fromDatabase:
+          name: student-management-db
+          property: host
+
+      - key: DB_PORT
+        fromDatabase:
+          name: student-management-db
+          property: port
+
+      - key: DB_DATABASE
+        fromDatabase:
+          name: student-management-db
+          property: database
+
+      - key: DB_USERNAME
+        fromDatabase:
+          name: student-management-db
+          property: user
+
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: student-management-db
+          property: password
+
+      - key: CACHE_STORE
+        value: database
+
+      - key: SESSION_DRIVER
+        value: database
+
+      - key: QUEUE_CONNECTION
+        value: database
+
+      - key: LOG_CHANNEL
+        value: stderr
+
+databases:
+  - name: student-management-db
+    plan: free
+    databaseName: student_management_db
+    user: student_management_user

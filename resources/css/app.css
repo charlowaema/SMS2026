@@ -236,3 +236,15 @@ body {
 body {
     border-top: none !important;
 }
+
+.student-detail {
+    min-height: 55px;
+}
+
+.student-detail small {
+    font-size: 0.85rem;
+}
+
+.student-detail span {
+    font-size: 0.95rem;
+}

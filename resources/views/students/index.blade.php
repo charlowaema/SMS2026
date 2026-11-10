@@ -24,19 +24,23 @@
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>Student No.</th>
-                            <th>Name</th>
-                            <th>Gender</th>
-                            <th>Phone</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
+                <thead>
+                <tr>
+                    <th>Student No.</th>
+                    <th>Name</th>
+                    <th>Course</th>
+                    <th>Semester</th>
+                    <th>Academic Year</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
                     <tbody>
                         @forelse($students as $student)
+                          @php
+                            $enrollment = $student->enrollments->sortByDesc('created_at')->first();
+                        @endphp
                             <tr>
                                 <td>
                                     {{ $student->student_number }}
@@ -44,6 +48,18 @@
                                 <td>
                                     {{ $student->first_name }}
                                     {{ $student->last_name }}
+                                </td>
+
+                                  <td>
+                                    {{ $enrollment?->course?->course_name ?? 'Not enrolled' }}
+                                </td>
+
+                                <td>
+                                    {{ $enrollment?->semester?->name ?? 'Not assigned' }}
+                                </td>
+
+                                <td>
+                                    {{ $enrollment?->academicYear?->name ?? 'Not assigned' }}
                                 </td>
                                 <td>
                                     {{ $student->gender ?? '-' }}
@@ -74,6 +90,13 @@
                                        class="btn btn-sm btn-outline-warning">
                                         <i class="bi bi-pencil"></i>
                                     </a>
+
+                                    <a href="{{ route('payments.student.statement', ['student' => $student->id]) }}"
+                                    class="btn btn-sm btn-outline-success"
+                                    title="Fee Statement">
+                                        <i class="bi bi-receipt"></i>
+                                    </a>
+                                    
                                     <form action="{{ route('students.destroy', $student) }}"
                                           method="POST"
                                           class="d-inline">
