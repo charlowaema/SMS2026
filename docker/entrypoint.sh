@@ -12,6 +12,10 @@ fi
 php artisan config:clear
 php artisan route:clear
 php artisan view:clear
+
+echo "========== REGISTERED MPESA ROUTES =========="
+php artisan route:list --path=mpesa
+echo "========== END MPESA ROUTES =========="
  
 # Run migrations
 php artisan migrate --force --no-interaction
